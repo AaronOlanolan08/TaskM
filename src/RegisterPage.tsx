@@ -22,7 +22,7 @@ function RegisterPage() {
     setIsSubmitting(true);
     try {
       await api.post("/auth/register", { name, email, password });
-      navigate("/", { replace: true });
+      navigate("/home", { replace: true });
     } catch (error) {
       const serverMessage = isAxiosError<{ error?: string }>(error)
         ? error.response?.data.error
@@ -36,7 +36,7 @@ function RegisterPage() {
   return (
     <main className="login-page">
       <section className="login-story" aria-label="About Taskm">
-        <Link className="login-brand" to="/" aria-label="Taskm home">
+        <Link className="login-brand" to="/home" aria-label="Taskm home">
           <span className="brand-mark"><CalendarDays size={18} strokeWidth={2.2} /></span>
           <span className="brand-name">taskm</span>
         </Link>

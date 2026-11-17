@@ -16,10 +16,34 @@ export async function createProject(
   });
 }
 
+export async function addWorkspaceMember(workspaceId: string, email: string) {
+  const user = await prisma.user.findFirst({
+    where: { email, disabledAt: null },
+    select: { id: true, name: true, email: true },
+  });
+  if (!user) return { status: "not_found" as const };
+
+  const existingMembership = await prisma.workspaceMember.findUnique({
+    where: { workspaceId_userId: { workspaceId, userId: user.id } },
+    select: { userId: true },
+  });
+  if (existingMembership) return { status: "already_member" as const };
+
+  const membership = await prisma.workspaceMember.create({
+    data: { workspaceId, userId: user.id },
+    select: { role: true, user: { select: { id: true, name: true, email: true } } },
+  });
+
+  return {
+    status: "added" as const,
+    member: { ...membership.user, role: membership.role },
+  };
+}
+
 export async function getWorkspaceForUser(userId: string) {
   return prisma.workspaceMember.findFirst({
     where: { userId },
-    orderBy: { joinedAt: "asc" },
+    orderBy: { joinedAt: "desc" },
     include: {
       workspace: {
         include: {

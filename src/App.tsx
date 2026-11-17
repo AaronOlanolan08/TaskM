@@ -138,7 +138,7 @@ function App({ currentUser }: { currentUser: PublicUser }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
-  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [isHeaderProfileMenuOpen, setIsHeaderProfileMenuOpen] = useState(false);
   const [accountModal, setAccountModal] = useState<"profile" | "settings" | null>(null);
   const [isCompactTaskList, setIsCompactTaskList] = useState(false);
@@ -270,6 +270,14 @@ function App({ currentUser }: { currentUser: PublicUser }) {
         first.name.localeCompare(second.name),
       ),
     );
+    setApiError("");
+  };
+
+  const inviteMember = async (email: string) => {
+    const response = await api.post<{ member: WorkspaceMember }>("/workspace/members", {
+      email,
+    });
+    setMembers((currentMembers) => [...currentMembers, response.data.member]);
     setApiError("");
   };
 
@@ -583,7 +591,9 @@ function App({ currentUser }: { currentUser: PublicUser }) {
                     <span className="presence presence-online" />
                   </div>
                 ))}
-                <button className="invite-button"><Users size={15} /> Invite a teammate</button>
+                <button className="invite-button" onClick={() => setIsInviteModalOpen(true)}>
+                  <Users size={15} /> Invite a teammate
+                </button>
               </div>
             </aside>
           </section>
@@ -604,6 +614,12 @@ function App({ currentUser }: { currentUser: PublicUser }) {
         <NewProjectModal
           onClose={() => setIsProjectModalOpen(false)}
           onCreate={addProject}
+        />
+      )}
+      {isInviteModalOpen && (
+        <InviteTeammateModal
+          onClose={() => setIsInviteModalOpen(false)}
+          onInvite={inviteMember}
         />
       )}
       {accountModal && (
@@ -728,6 +744,80 @@ function MiniWeek() {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function InviteTeammateModal({
+  onClose,
+  onInvite,
+}: {
+  onClose: () => void;
+  onInvite: (email: string) => Promise<void>;
+}) {
+  const [email, setEmail] = useState("");
+  const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsSubmitting(true);
+    setError("");
+    try {
+      await onInvite(email.trim().toLowerCase());
+      onClose();
+    } catch (submitError) {
+      const message = isAxiosError<{ error?: string }>(submitError)
+        ? submitError.response?.data.error
+        : undefined;
+      setError(message ?? "Could not add this teammate. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <section aria-labelledby="invite-modal-title" aria-modal="true" className="task-modal" role="dialog">
+        <div className="modal-heading">
+          <div>
+            <span className="modal-eyebrow">GROW YOUR TEAM</span>
+            <h2 id="invite-modal-title">Add a teammate</h2>
+          </div>
+          <button aria-label="Close dialog" className="icon-button" onClick={onClose} type="button"><X size={18} /></button>
+        </div>
+        <form onSubmit={submit}>
+          <label className="form-field">
+            <span>Email address</span>
+            <input
+              autoComplete="email"
+              autoFocus
+              maxLength={320}
+              onChange={(event) => { setEmail(event.target.value); setError(""); }}
+              placeholder="teammate@company.com"
+              required
+              type="email"
+              value={email}
+            />
+          </label>
+          <p>They must already have an active Taskm account to be added.</p>
+          {error && <p className="form-error" role="alert">{error}</p>}
+          <div className="modal-actions">
+            <button className="secondary-button" onClick={onClose} type="button" disabled={isSubmitting}>Cancel</button>
+            <button className="primary-button" type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Adding..." : "Add teammate"}
+            </button>
+          </div>
+        </form>
+      </section>
     </div>
   );
 }

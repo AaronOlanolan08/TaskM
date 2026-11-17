@@ -1,12 +1,63 @@
 import type { Request, Response } from "express";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
-import { createProject, getWorkspaceForUser } from "./workspace.service.js";
+import {
+  addWorkspaceMember,
+  createProject,
+  getWorkspaceForUser,
+} from "./workspace.service.js";
 
 const createProjectSchema = z.object({
   name: z.string().trim().min(1).max(100),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
 });
+
+const addWorkspaceMemberSchema = z.object({
+  email: z.string().trim().toLowerCase().email().max(320),
+});
+
+export async function addWorkspaceMemberController(
+  request: Request,
+  response: Response,
+): Promise<void> {
+  const parsed = addWorkspaceMemberSchema.safeParse(request.body);
+  if (!parsed.success) {
+    response.status(400).json({ error: "Enter a valid email address." });
+    return;
+  }
+
+  const membership = await getWorkspaceForUser(request.auth!.userId);
+  if (!membership) {
+    response.status(404).json({ error: "No workspace is available for this account." });
+    return;
+  }
+
+  try {
+    const result = await addWorkspaceMember(
+      membership.workspaceId,
+      parsed.data.email,
+    );
+    if (result.status === "not_found") {
+      response.status(404).json({ error: "No active Taskm account was found with that email." });
+      return;
+    }
+    if (result.status === "already_member") {
+      response.status(409).json({ error: "That person is already a member of this workspace." });
+      return;
+    }
+
+    response.status(201).json({ member: result.member });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      response.status(409).json({ error: "That person is already a member of this workspace." });
+      return;
+    }
+    throw error;
+  }
+}
 
 export async function createProjectController(
   request: Request,

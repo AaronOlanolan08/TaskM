@@ -13,7 +13,7 @@ function LoginPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    document.title = "Sign in — Taskm";
+    document.title = "Sign in - Taskm";
   }, []);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -23,7 +23,7 @@ function LoginPage() {
 
     try {
       await api.post("/auth/login", { email, password });
-      navigate("/", { replace: true });
+      navigate("/home", { replace: true });
     } catch (error) {
       const serverMessage = isAxiosError<{ error?: string }>(error)
         ? error.response?.data.error
@@ -37,7 +37,7 @@ function LoginPage() {
   return (
     <main className="login-page">
       <section className="login-story" aria-label="About Taskm">
-        <a className="login-brand" href="/" aria-label="Taskm home">
+        <a className="login-brand" href="/home" aria-label="Taskm home">
           <span className="brand-mark"><CalendarDays size={18} strokeWidth={2.2} /></span>
           <span className="brand-name">taskm</span>
         </a>
@@ -155,7 +155,6 @@ function LoginPage() {
           <p className="login-help">
             Need an account? <Link to="/register">Create one</Link>
           </p>
-          <Link className="login-back-link" to="/">Back to your workspace</Link>
         </div>
         <footer className="login-legal">
           <span>© {new Date().getFullYear()} Taskm</span>

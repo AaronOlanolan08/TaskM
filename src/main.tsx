@@ -53,10 +53,11 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/" element={<Navigate to="/home" replace />} />
         <Route element={<RequireAuth />}>
-          <Route path="/" element={<DashboardPage />} />
+          <Route path="/home" element={<DashboardPage />} />
         </Route>
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to="/home" replace />} />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>,
