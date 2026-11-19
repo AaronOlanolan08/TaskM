@@ -63,6 +63,7 @@ Core features:
 
 ## Testing and Quality Assurance
 - Write unit tests for business logic and integration tests for APIs.
+- Write E2E tests using Playwright
 - Test authentication, authorization, validation, and error handling.
 - Run relevant tests, linting, and type checks after modifications.
 - Do not remove or weaken existing tests to make changes pass.

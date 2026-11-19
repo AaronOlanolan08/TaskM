@@ -102,16 +102,7 @@ function LoginPage() {
             </div>
 
             <div className="login-field">
-              <span className="login-password-label">
-                <label htmlFor="login-password">Password</label>
-                <button
-                  className="login-inline-link"
-                  onClick={() => setMessage("Password recovery isn't available yet.")}
-                  type="button"
-                >
-                  Forgot password?
-                </button>
-              </span>
+              <label htmlFor="login-password">Password</label>
               <span className="login-password-wrap">
                 <input
                   id="login-password"
@@ -134,6 +125,13 @@ function LoginPage() {
                   {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
                 </button>
               </span>
+              <button
+                className="login-inline-link"
+                onClick={() => setMessage("Password recovery isn't available yet.")}
+                type="button"
+              >
+                Forgot password?
+              </button>
             </div>
 
             {message && <p className="login-message" role="alert">{message}</p>}

@@ -8,17 +8,23 @@ function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    document.title = "Create account — Taskm";
+    document.title = "Create account - Taskm";
   }, []);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setMessage("");
+    if (password !== confirmPassword) {
+      setMessage("Passwords do not match.");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       await api.post("/auth/register", { name, email, password });
@@ -60,17 +66,21 @@ function RegisterPage() {
           </div>
           <form className="login-form" onSubmit={submit}>
             <div className="login-field">
-              <label htmlFor="register-name">Your name</label>
-              <input id="register-name" autoComplete="name" maxLength={120} onChange={(event) => setName(event.target.value)} required value={name} />
+              <label className="required-field" htmlFor="register-name">Your name</label>
+              <input id="register-name" autoComplete="name" maxLength={120} onChange={(event) => { setName(event.target.value); setMessage(""); }} required value={name} />
             </div>
             <div className="login-field">
-              <label htmlFor="register-email">Email address</label>
-              <input id="register-email" autoComplete="email" onChange={(event) => setEmail(event.target.value)} required type="email" value={email} />
+              <label className="required-field" htmlFor="register-email">Email address</label>
+              <input id="register-email" autoComplete="email" onChange={(event) => { setEmail(event.target.value); setMessage(""); }} required type="email" value={email} />
             </div>
             <div className="login-field">
-              <label htmlFor="register-password">Password</label>
-              <input id="register-password" autoComplete="new-password" minLength={8} onChange={(event) => setPassword(event.target.value)} required type="password" value={password} />
+              <label className="required-field" htmlFor="register-password">Password</label>
+              <input id="register-password" autoComplete="new-password" minLength={8} onChange={(event) => { setPassword(event.target.value); setMessage(""); }} required type="password" value={password} />
               <small className="register-hint">Use at least 8 characters.</small>
+            </div>
+            <div className="login-field">
+              <label className="required-field" htmlFor="register-confirm-password">Confirm password</label>
+              <input id="register-confirm-password" autoComplete="new-password" onChange={(event) => { setConfirmPassword(event.target.value); setMessage(""); }} required type="password" value={confirmPassword} />
             </div>
             {message && <p className="login-message" role="alert">{message}</p>}
             <button className="login-submit" disabled={isSubmitting} type="submit">

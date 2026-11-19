@@ -49,7 +49,8 @@ async function registerAccount(page: Page, newAccount: TestAccount) {
   await page.goto("/register");
   await page.getByLabel("Your name").fill(newAccount.name);
   await page.getByLabel("Email address").fill(newAccount.email);
-  await page.getByLabel("Password").fill(newAccount.password);
+  await page.locator("#register-password").fill(newAccount.password);
+  await page.getByLabel("Confirm password").fill(newAccount.password);
   await page.getByRole("button", { name: "Create account", exact: true }).click();
   await expectWorkspace(page);
 }
@@ -263,4 +264,22 @@ test("shows authentication errors and password visibility controls", async ({ pa
   await expect(page.getByRole("alert")).toHaveText("Password recovery isn't available yet.");
   await page.getByRole("button", { name: "Continue with Google" }).click();
   await expect(page.getByRole("alert")).toHaveText("Google sign-in isn't configured yet.");
+});
+
+test("requires matching passwords when creating an account", async ({ page }) => {
+  await page.goto("/register");
+  await page.getByLabel("Your name").fill("Test User");
+  await page.getByLabel("Email address").fill("test@example.test");
+  await page.locator("#register-password").fill("password123");
+  await page.getByLabel("Confirm password").fill("different123");
+  await page.getByRole("button", { name: "Create account", exact: true }).click();
+
+  const error = page.getByRole("alert");
+  await expect(error).toHaveText("Passwords do not match.");
+  await expect(error).toHaveCSS("color", "rgb(180, 35, 24)");
+  for (const field of ["register-name", "register-email", "register-password", "register-confirm-password"]) {
+    const marker = await page.locator(`label[for="${field}"]`)
+      .evaluate((label) => window.getComputedStyle(label, "::after").content);
+    expect(marker).toBe('" *"');
+  }
 });
