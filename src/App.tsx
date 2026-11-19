@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Bell,
   CalendarDays,
   Check,
   CheckCheck,
@@ -17,7 +16,6 @@ import {
   Plus,
   Search,
   Settings2,
-  SlidersHorizontal,
   Sparkles,
   Trash2,
   Users,
@@ -37,6 +35,7 @@ type Task = {
   project: string;
   projectId: string | null;
   projectColor: string | null;
+  dueAt: string | null;
   date: string;
   time: string;
   priority: Priority;
@@ -113,6 +112,7 @@ function mapApiTask(task: ApiTask, currentUser: PublicUser): Task {
     project: task.project?.name ?? "No project",
     projectId: task.projectId,
     projectColor: task.project?.color ?? null,
+    dueAt: task.dueAt,
     date: dueDate ? localDate(dueDate) : "",
     time: dueDate
       ? formatTime(`${String(dueDate.getHours()).padStart(2, "0")}:${String(dueDate.getMinutes()).padStart(2, "0")}`)
@@ -283,6 +283,9 @@ function App({ currentUser }: { currentUser: PublicUser }) {
   const openCount = tasks.filter((task) => !task.completed).length;
   const completedCount = tasks.filter((task) => task.completed).length;
   const todayCount = tasks.filter((task) => task.date === todayKey).length;
+  const upcomingCount = tasks.filter(
+    (task) => !task.completed && task.date > todayKey,
+  ).length;
   const pageTitle =
     activeView === "All tasks" ? "All tasks" : activeView;
 
@@ -452,13 +455,14 @@ function App({ currentUser }: { currentUser: PublicUser }) {
             active={activeView === "Upcoming"}
             icon={<CalendarDays size={18} />}
             label="Upcoming"
-            count={openCount}
+            count={upcomingCount}
             onClick={() => navigate("Upcoming")}
           />
           <NavButton
             active={activeView === "All tasks"}
             icon={<ListTodo size={18} />}
             label="All tasks"
+            count={openCount}
             onClick={() => navigate("All tasks")}
           />
           <NavButton
@@ -516,10 +520,6 @@ function App({ currentUser }: { currentUser: PublicUser }) {
               />
               <kbd>⌘ K</kbd>
             </label>
-            <button className="icon-button notification-button" aria-label="Notifications">
-              <Bell size={18} />
-              <span className="notification-dot" />
-            </button>
             <div className="account-menu-wrapper" ref={accountMenuRef}>
               <button
                 aria-expanded={isHeaderProfileMenuOpen}
@@ -625,9 +625,6 @@ function App({ currentUser }: { currentUser: PublicUser }) {
                   <h2>{activeView === "Today" ? "Your schedule" : `${pageTitle} list`}</h2>
                   <p>{visibleTasks.length} {visibleTasks.length === 1 ? "task" : "tasks"} to keep things moving</p>
                 </div>
-                <button className="secondary-button filter-button" onClick={() => setActiveFilter(activeFilter === "All" ? "Open" : "All")}>
-                  <SlidersHorizontal size={15} /> Filter <span className="filter-state">{activeFilter === "All" ? "All" : "Open"}</span>
-                </button>
               </div>
 
               <div className="filter-pills" role="tablist" aria-label="Filter tasks">
@@ -797,6 +794,8 @@ function TaskRow({
   onDelete: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const isOverdue =
+    !task.completed && task.dueAt !== null && new Date(task.dueAt).getTime() < Date.now();
   const changeStatus = (status: Task["status"]) => {
     onSetStatus(status);
     setMenuOpen(false);
@@ -811,7 +810,12 @@ function TaskRow({
         {task.completed ? <Check size={13} strokeWidth={2.7} /> : <Circle size={19} strokeWidth={1.6} />}
       </button>
       <div className="task-main">
-        <div className="task-title-line"><h3>{task.title}</h3><span className={`priority priority-${task.priority.toLowerCase()}`}><span />{task.priority.charAt(0) + task.priority.slice(1).toLowerCase()}</span></div>
+        <div className="task-title-line">
+          <h3>{task.title}</h3>
+          {isOverdue && <span className="task-status-badge task-status-overdue">Overdue</span>}
+          {task.status === "IN_PROGRESS" && <span className="task-status-badge task-status-in-progress">In progress</span>}
+          <span className={`priority priority-${task.priority.toLowerCase()}`}><span />{task.priority.charAt(0) + task.priority.slice(1).toLowerCase()}</span>
+        </div>
         <div className="task-meta">
           <span className="task-project"><span className="project-dot" style={task.projectColor ? { backgroundColor: task.projectColor } : undefined} />{task.project}</span>
           <span className="meta-divider" />

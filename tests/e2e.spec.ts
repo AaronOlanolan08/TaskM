@@ -14,6 +14,7 @@ let account: TestAccount | null =
 const projectName = `E2E Project ${randomUUID().slice(0, 8)}`;
 const firstTaskTitle = `E2E Upcoming ${randomUUID().slice(0, 8)}`;
 const secondTaskTitle = `E2E Today ${randomUUID().slice(0, 8)}`;
+const overdueTaskTitle = `E2E Overdue ${randomUUID().slice(0, 8)}`;
 
 function createTestAccount(name = "Playwright User"): TestAccount {
   return {
@@ -141,17 +142,36 @@ test("end-to-end workspace journey", async ({ page, browser }, testInfo) => {
       String(tomorrow.getMonth() + 1).padStart(2, "0"),
       String(tomorrow.getDate()).padStart(2, "0"),
     ].join("-");
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayDate = [
+      yesterday.getFullYear(),
+      String(yesterday.getMonth() + 1).padStart(2, "0"),
+      String(yesterday.getDate()).padStart(2, "0"),
+    ].join("-");
 
     await createTask(page, firstTaskTitle, { priority: "High", dueDate: tomorrowDate });
     await expect(page.getByText("Tomorrow", { exact: true })).toBeVisible();
     await expect(page.getByText("10:30 AM", { exact: true })).toBeVisible();
     await expect(page.getByText("High", { exact: true })).toBeVisible();
     await createTask(page, secondTaskTitle, { priority: "Low" });
+    await createTask(page, overdueTaskTitle, { priority: "Low", dueDate: yesterdayDate });
   });
 
   await test.step("search, filter, update, reload, and delete tasks", async () => {
     const navigation = page.getByRole("navigation", { name: "Main navigation" });
     await navigation.getByRole("button", { name: /^All tasks/ }).click();
+
+    const overdueTask = page.locator(".task-row").filter({ hasText: overdueTaskTitle });
+    await expect(overdueTask.getByText("Overdue", { exact: true })).toBeVisible();
+    await overdueTask.getByRole("button", { name: `Options for ${overdueTaskTitle}` }).click();
+    await overdueTask.getByRole("button", { name: "Mark in progress" }).click();
+    await expect(overdueTask.getByText("Overdue", { exact: true })).toBeVisible();
+    await expect(overdueTask.getByText("In progress", { exact: true })).toBeVisible();
+    await overdueTask.getByRole("button", { name: `Options for ${overdueTaskTitle}` }).click();
+    await overdueTask.getByRole("button", { name: "Mark complete" }).click();
+    await expect(overdueTask.getByText("Overdue", { exact: true })).toBeHidden();
+    await expect(overdueTask.getByText("In progress", { exact: true })).toBeHidden();
 
     const search = page.getByRole("textbox", { name: "Search tasks" });
     await search.fill(firstTaskTitle);
@@ -197,6 +217,10 @@ test("end-to-end workspace journey", async ({ page, browser }, testInfo) => {
     await persistedTask.getByRole("button", { name: `Options for ${firstTaskTitle}` }).click();
     await persistedTask.getByRole("button", { name: "Delete task" }).click();
     await expect(page.getByRole("heading", { name: firstTaskTitle, exact: true })).toBeHidden();
+
+    await overdueTask.getByRole("button", { name: `Options for ${overdueTaskTitle}` }).click();
+    await overdueTask.getByRole("button", { name: "Delete task" }).click();
+    await expect(page.getByRole("heading", { name: overdueTaskTitle, exact: true })).toBeHidden();
   });
 
   await test.step("validate invitation errors and invite an active teammate", async () => {

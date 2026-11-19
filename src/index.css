@@ -156,6 +156,9 @@ h1, h2, h3, p { margin-top: 0; }
 .task-title-line { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .task-title-line h3 { min-width: 0; overflow: hidden; margin: 0; color: #24262a; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .task-row-complete .task-title-line h3 { color: #96999e; text-decoration: line-through; }
+.task-status-badge { display: inline-flex; flex: 0 0 auto; align-items: center; padding: 3px 6px; border-radius: 999px; font-size: 9px; font-weight: 600; white-space: nowrap; }
+.task-status-overdue { background: #fff1f0; color: #b42318; }
+.task-status-in-progress { background: #eef4ff; color: #3156a4; }
 .priority { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 5px; color: #777a80; font-size: 9px; }
 .priority span { width: 5px; height: 5px; border-radius: 50%; background: #a9abb0; }
 .priority-high span { background: #ef4444; }
