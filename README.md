@@ -167,12 +167,38 @@ npm run dev
 
 The frontend uses Vite dev server proxying to the Express API under `/api`.
 
+### End-to-end tests
+Install the Playwright browser once, then run the E2E test:
+
+```bash
+npx playwright install chromium firefox webkit
+npm run test:e2e
+```
+
+The Playwright config starts the API and frontend automatically and expects the
+local PostgreSQL database to be running with migrations applied. The suite
+covers registration/sign-in, auth errors, profile and settings, project and
+task creation/validation, search and status filters, task persistence/deletion,
+member invitation success and errors, mobile navigation, and logout/protected
+routes in Chromium, Firefox, and WebKit. Successful invitation of a newly
+registered teammate runs in Chromium only to avoid exceeding the registration
+rate limit.
+
+By default, it registers a disposable account and a teammate per run. To reuse
+an existing primary test account, set both `E2E_USER_EMAIL` and
+`E2E_USER_PASSWORD` in `.env` (or the process environment); the Playwright
+config loads `.env`. The suite leaves its uniquely named project and teammate
+membership in that workspace and deletes the tasks it creates. The
+authentication API limits registration attempts, so use a dedicated existing
+test account for frequent repeat runs.
+
 ## Useful scripts
 
 ```bash
 npm run dev                # start the frontend dev server
 npm run build              # build frontend + server
 npm run preview            # preview the built frontend
+npm run test:e2e           # run Playwright end-to-end tests
 npm run server:dev         # run the API in watch mode
 npm run server:build       # compile the server TypeScript
 npm run db:generate        # regenerate Prisma client
