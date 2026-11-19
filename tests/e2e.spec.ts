@@ -11,7 +11,7 @@ let account: TestAccount | null =
     ? { email: configuredEmail, password: configuredPassword, name: "E2E user" }
     : null;
 
-const projectName = `E2E Project ${randomUUID().slice(0, 8)}`;
+let projectName = `E2E Project ${randomUUID().slice(0, 8)}`;
 const firstTaskTitle = `E2E Upcoming ${randomUUID().slice(0, 8)}`;
 const secondTaskTitle = `E2E Today ${randomUUID().slice(0, 8)}`;
 const overdueTaskTitle = `E2E Overdue ${randomUUID().slice(0, 8)}`;
@@ -119,7 +119,8 @@ test("end-to-end workspace journey", async ({ page, browser }, testInfo) => {
     await projectDialog.getByLabel("Project name").fill(projectName);
     await projectDialog.getByRole("button", { name: "Create project" }).click();
     await expect(projectDialog).toBeHidden();
-    await expect(page.getByRole("button", { name: projectName, exact: true })).toBeVisible();
+    let projectRow = page.locator(".project-row").filter({ hasText: projectName });
+    await expect(projectRow.getByText(projectName, { exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: "Create project" }).click();
     const duplicateProjectDialog = page.getByRole("dialog", { name: "Create a project" });
@@ -128,6 +129,24 @@ test("end-to-end workspace journey", async ({ page, browser }, testInfo) => {
     await expect(duplicateProjectDialog.getByRole("alert"))
       .toHaveText("A project with that name already exists.");
     await duplicateProjectDialog.getByRole("button", { name: "Cancel" }).click();
+
+    await projectRow.getByRole("button", { name: `Options for ${projectName}` }).click();
+    await projectRow.getByRole("menuitem", { name: "Edit" }).click();
+    const editProjectDialog = page.getByRole("dialog", { name: "Edit project" });
+    const updatedProjectName = `${projectName} Updated`;
+    await editProjectDialog.getByLabel("Project name").fill(updatedProjectName);
+    await editProjectDialog.getByLabel("Project color").evaluate((element) => {
+      if (!(element instanceof HTMLInputElement)) throw new Error("Project color input not found.");
+      element.value = "#123456";
+      element.dispatchEvent(new Event("input", { bubbles: true }));
+      element.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await editProjectDialog.getByRole("button", { name: "Save changes" }).click();
+    await expect(editProjectDialog).toBeHidden();
+    projectName = updatedProjectName;
+    projectRow = page.locator(".project-row").filter({ hasText: projectName });
+    await expect(projectRow.getByText(projectName, { exact: true })).toBeVisible();
+    await expect(projectRow.locator(".project-dot")).toHaveCSS("background-color", "rgb(18, 52, 86)");
 
     await page.getByRole("button", { name: "New task" }).click();
     const taskDialog = page.getByRole("dialog", { name: "Create a task" });
@@ -221,6 +240,13 @@ test("end-to-end workspace journey", async ({ page, browser }, testInfo) => {
     await overdueTask.getByRole("button", { name: `Options for ${overdueTaskTitle}` }).click();
     await overdueTask.getByRole("button", { name: "Delete task" }).click();
     await expect(page.getByRole("heading", { name: overdueTaskTitle, exact: true })).toBeHidden();
+
+    await projectRow.getByRole("button", { name: `Options for ${projectName}` }).click();
+    await projectRow.getByRole("menuitem", { name: "Delete" }).click();
+    await expect(projectRow).toBeHidden();
+    await page.reload();
+    await expectWorkspace(page);
+    await expect(page.locator(".project-row").filter({ hasText: projectName })).toHaveCount(0);
   });
 
   await test.step("validate invitation errors and invite an active teammate", async () => {

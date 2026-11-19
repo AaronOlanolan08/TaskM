@@ -16,6 +16,31 @@ export async function createProject(
   });
 }
 
+export async function updateProject(
+  workspaceId: string,
+  projectId: string,
+  input: { name: string; color: string | null },
+) {
+  const result = await prisma.project.updateMany({
+    where: { id: projectId, workspaceId, archivedAt: null },
+    data: { name: input.name, color: input.color },
+  });
+  if (result.count === 0) return null;
+
+  return prisma.project.findFirst({
+    where: { id: projectId, workspaceId, archivedAt: null },
+    select: { id: true, name: true, color: true },
+  });
+}
+
+export async function archiveProject(workspaceId: string, projectId: string) {
+  const result = await prisma.project.updateMany({
+    where: { id: projectId, workspaceId, archivedAt: null },
+    data: { archivedAt: new Date() },
+  });
+  return result.count > 0;
+}
+
 export async function addWorkspaceMember(workspaceId: string, email: string) {
   const user = await prisma.user.findFirst({
     where: { email, disabledAt: null },

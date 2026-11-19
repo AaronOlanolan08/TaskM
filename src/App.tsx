@@ -13,6 +13,7 @@ import {
   ListTodo,
   LogOut,
   Menu,
+  Pencil,
   Plus,
   Search,
   Settings2,
@@ -141,6 +142,7 @@ function App({ currentUser }: { currentUser: PublicUser }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
+  const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [isHeaderProfileMenuOpen, setIsHeaderProfileMenuOpen] = useState(false);
   const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
@@ -342,6 +344,46 @@ function App({ currentUser }: { currentUser: PublicUser }) {
     setApiError("");
   };
 
+  const saveProject = async (id: string, project: { name: string; color: string }) => {
+    const response = await api.patch<{ project: Project }>(
+      `/workspace/projects/${id}`,
+      project,
+      { params: { workspaceId: selectedWorkspaceId } },
+    );
+    setProjects((currentProjects) =>
+      currentProjects
+        .map((item) => item.id === id ? response.data.project : item)
+        .sort((first, second) => first.name.localeCompare(second.name)),
+    );
+    setTasks((currentTasks) =>
+      currentTasks.map((task) =>
+        task.projectId === id
+          ? {
+              ...task,
+              project: response.data.project.name,
+              projectColor: response.data.project.color,
+            }
+          : task,
+      ),
+    );
+    setApiError("");
+  };
+
+  const deleteProject = async (id: string) => {
+    try {
+      await api.delete(`/workspace/projects/${id}`, {
+        params: { workspaceId: selectedWorkspaceId },
+      });
+      setProjects((currentProjects) => currentProjects.filter((project) => project.id !== id));
+      setApiError("");
+    } catch (error) {
+      const message = isAxiosError<{ error?: string }>(error)
+        ? error.response?.data.error
+        : undefined;
+      setApiError(message ?? "Could not delete this project. Please try again.");
+    }
+  };
+
   const inviteMember = async (email: string) => {
     const response = await api.post<{ member: WorkspaceMember }>("/workspace/members", {
       email,
@@ -377,6 +419,7 @@ function App({ currentUser }: { currentUser: PublicUser }) {
     setIsSidebarOpen(false);
     setIsModalOpen(false);
     setIsProjectModalOpen(false);
+    setProjectToEdit(null);
     setIsInviteModalOpen(false);
     setQuery("");
     setTasks([]);
@@ -484,12 +527,13 @@ function App({ currentUser }: { currentUser: PublicUser }) {
             </button>
           </div>
           {projects.map((project, index) => (
-            <button className="project-link" key={project.id} onClick={() => { setQuery(project.name); navigate("All tasks"); }}>
-              <span
-                className={`project-dot ${project.color ? "" : ["dot-violet", "dot-orange", "dot-green"][index % 3]}`}
-                style={project.color ? { backgroundColor: project.color } : undefined}
-              /> {project.name}
-            </button>
+            <ProjectSidebarItem
+              index={index}
+              key={project.id}
+              onDelete={() => void deleteProject(project.id)}
+              onEdit={() => setProjectToEdit(project)}
+              project={project}
+            />
           ))}
         </nav>
 
@@ -715,10 +759,16 @@ function App({ currentUser }: { currentUser: PublicUser }) {
           projects={projects}
         />
       )}
-      {isProjectModalOpen && (
+      {(isProjectModalOpen || projectToEdit) && (
         <NewProjectModal
-          onClose={() => setIsProjectModalOpen(false)}
-          onCreate={addProject}
+          onClose={() => {
+            setIsProjectModalOpen(false);
+            setProjectToEdit(null);
+          }}
+          onSave={projectToEdit
+            ? (project) => saveProject(projectToEdit.id, project)
+            : addProject}
+          project={projectToEdit ?? undefined}
         />
       )}
       {isInviteModalOpen && (
@@ -757,6 +807,67 @@ function NavButton({
     <button className={`nav-item ${active ? "nav-item-active" : ""}`} onClick={onClick}>
       {icon}<span>{label}</span>{count !== undefined && <span className="nav-count">{count}</span>}
     </button>
+  );
+}
+
+function ProjectSidebarItem({
+  project,
+  index,
+  onEdit,
+  onDelete,
+}: {
+  project: Project;
+  index: number;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  return (
+    <div className="project-row">
+      <span
+        className={`project-dot ${project.color ? "" : ["dot-violet", "dot-orange", "dot-green"][index % 3]}`}
+        style={project.color ? { backgroundColor: project.color } : undefined}
+      />
+      <span className="project-name">{project.name}</span>
+      <div className="project-actions">
+        <button
+          aria-expanded={isMenuOpen}
+          aria-haspopup="menu"
+          aria-label={`Options for ${project.name}`}
+          className="tiny-icon-button project-options-button"
+          onClick={() => setIsMenuOpen((isOpen) => !isOpen)}
+          type="button"
+        >
+          <Ellipsis size={17} />
+        </button>
+        {isMenuOpen && (
+          <div className="project-menu" role="menu">
+            <button
+              onClick={() => {
+                setIsMenuOpen(false);
+                onEdit();
+              }}
+              role="menuitem"
+              type="button"
+            >
+              <Pencil size={14} /> Edit
+            </button>
+            <button
+              className="project-menu-delete"
+              onClick={() => {
+                setIsMenuOpen(false);
+                onDelete();
+              }}
+              role="menuitem"
+              type="button"
+            >
+              <Trash2 size={14} /> Delete
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -1100,13 +1211,15 @@ function AccountModal({
 
 function NewProjectModal({
   onClose,
-  onCreate,
+  onSave,
+  project,
 }: {
   onClose: () => void;
-  onCreate: (project: { name: string; color: string }) => Promise<void>;
+  onSave: (project: { name: string; color: string }) => Promise<void>;
+  project?: Project;
 }) {
-  const [name, setName] = useState("");
-  const [color, setColor] = useState("#8b5cf6");
+  const [name, setName] = useState(project?.name ?? "");
+  const [color, setColor] = useState(project?.color ?? "#8b5cf6");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -1121,13 +1234,13 @@ function NewProjectModal({
     setIsSubmitting(true);
     setError("");
     try {
-      await onCreate({ name: cleanName, color });
+      await onSave({ name: cleanName, color });
       onClose();
     } catch (submitError) {
       const message = isAxiosError<{ error?: string }>(submitError)
         ? submitError.response?.data.error
         : undefined;
-      setError(message ?? "Could not create this project. Please try again.");
+      setError(message ?? `Could not ${project ? "update" : "create"} this project. Please try again.`);
     } finally {
       setIsSubmitting(false);
     }
@@ -1145,7 +1258,7 @@ function NewProjectModal({
     <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <section aria-labelledby="project-modal-title" aria-modal="true" className="task-modal" role="dialog">
         <div className="modal-heading">
-          <div><span className="modal-eyebrow">MAKE ROOM FOR GOOD WORK</span><h2 id="project-modal-title">Create a project</h2></div>
+          <div><span className="modal-eyebrow">MAKE ROOM FOR GOOD WORK</span><h2 id="project-modal-title">{project ? "Edit project" : "Create a project"}</h2></div>
           <button className="icon-button" aria-label="Close dialog" onClick={onClose}><X size={18} /></button>
         </div>
         <form onSubmit={submit}>
@@ -1167,7 +1280,7 @@ function NewProjectModal({
           <div className="modal-actions">
             <button className="secondary-button" disabled={isSubmitting} onClick={onClose} type="button">Cancel</button>
             <button className="primary-button" disabled={isSubmitting} type="submit">
-              <Plus size={16} /> {isSubmitting ? "Creating..." : "Create project"}
+              {!project && <Plus size={16} />} {isSubmitting ? "Saving..." : project ? "Save changes" : "Create project"}
             </button>
           </div>
         </form>

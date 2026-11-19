@@ -3,9 +3,11 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import {
   addWorkspaceMember,
+  archiveProject,
   createProject,
   getWorkspaceForUser,
   listWorkspacesForUser,
+  updateProject,
 } from "./workspace.service.js";
 
 const createProjectSchema = z.object({
@@ -108,6 +110,63 @@ export async function createProjectController(
     }
     throw error;
   }
+}
+
+export async function updateProjectController(
+  request: Request,
+  response: Response,
+): Promise<void> {
+  const parsed = createProjectSchema.safeParse(request.body);
+  const id = z.string().uuid().safeParse(request.params.id);
+  if (!parsed.success || !id.success) {
+    response.status(400).json({ error: "Enter a project name and valid color." });
+    return;
+  }
+
+  const membership = await workspaceForRequest(request, response);
+  if (!membership) return;
+
+  try {
+    const project = await updateProject(
+      membership.workspaceId,
+      id.data,
+      { name: parsed.data.name, color: parsed.data.color ?? null },
+    );
+    if (!project) {
+      response.status(404).json({ error: "Project not found." });
+      return;
+    }
+    response.json({ project });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      response.status(409).json({ error: "A project with that name already exists." });
+      return;
+    }
+    throw error;
+  }
+}
+
+export async function deleteProjectController(
+  request: Request,
+  response: Response,
+): Promise<void> {
+  const id = z.string().uuid().safeParse(request.params.id);
+  if (!id.success) {
+    response.status(400).json({ error: "Invalid project id." });
+    return;
+  }
+
+  const membership = await workspaceForRequest(request, response);
+  if (!membership) return;
+
+  if (!(await archiveProject(membership.workspaceId, id.data))) {
+    response.status(404).json({ error: "Project not found." });
+    return;
+  }
+  response.status(204).end();
 }
 
 export async function currentWorkspaceController(
