@@ -50,6 +50,7 @@ type Task = {
 
 type Project = { id: string; name: string; color: string | null };
 type WorkspaceMember = { id: string; name: string; email: string; role: string };
+type WorkspaceOption = { id: string; name: string; role: string };
 type ApiTask = {
   id: string;
   title: string;
@@ -131,6 +132,8 @@ function App({ currentUser }: { currentUser: PublicUser }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
+  const [workspaces, setWorkspaces] = useState<WorkspaceOption[]>([]);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
   const [workspaceName, setWorkspaceName] = useState("");
   const [activeView, setActiveView] = useState<View>("Today");
   const [activeFilter, setActiveFilter] = useState("All");
@@ -140,22 +143,61 @@ function App({ currentUser }: { currentUser: PublicUser }) {
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [isHeaderProfileMenuOpen, setIsHeaderProfileMenuOpen] = useState(false);
+  const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
   const [accountModal, setAccountModal] = useState<"profile" | "settings" | null>(null);
   const [isCompactTaskList, setIsCompactTaskList] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError] = useState("");
   const accountMenuRef = useRef<HTMLDivElement>(null);
+  const workspaceMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    let active = true;
+    const loadWorkspaces = async () => {
+      setIsLoading(true);
+      setApiError("");
+      try {
+        const response = await api.get<{ items: WorkspaceOption[] }>("/workspace");
+        if (!active) return;
+        const availableWorkspaces = response.data.items;
+        setWorkspaces(availableWorkspaces);
+        if (availableWorkspaces.length === 0) {
+          setApiError("No workspace is available for this account.");
+          return;
+        }
+        const savedWorkspaceId = window.localStorage.getItem(`taskm-workspace-${currentUser.id}`);
+        const initialWorkspace = availableWorkspaces.find(
+          (workspace) => workspace.id === savedWorkspaceId,
+        ) ?? availableWorkspaces[0];
+        setSelectedWorkspaceId(initialWorkspace.id);
+      } catch (error) {
+        if (!active) return;
+        const message = isAxiosError<{ error?: string }>(error)
+          ? error.response?.data.error
+          : undefined;
+        setApiError(message ?? "Unable to load your workspaces. Please try again.");
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    };
+    void loadWorkspaces();
+    return () => { active = false; };
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (!selectedWorkspaceId) return;
     let active = true;
     const loadWorkspace = async () => {
       setIsLoading(true);
       setApiError("");
       try {
+        const params = { workspaceId: selectedWorkspaceId };
         const [workspaceResponse, taskResponse] = await Promise.all([
-          api.get<ApiWorkspace>("/workspace/current"),
-          api.get<{ items: ApiTask[] }>("/tasks", { params: { page: 1, limit: 100 } }),
+          api.get<ApiWorkspace>("/workspace/current", { params }),
+          api.get<{ items: ApiTask[] }>("/tasks", {
+            params: { ...params, page: 1, limit: 100 },
+          }),
         ]);
         if (!active) return;
         setWorkspaceName(workspaceResponse.data.name);
@@ -174,7 +216,7 @@ function App({ currentUser }: { currentUser: PublicUser }) {
     };
     void loadWorkspace();
     return () => { active = false; };
-  }, [currentUser]);
+  }, [currentUser, selectedWorkspaceId]);
 
   useEffect(() => {
     if (!isHeaderProfileMenuOpen) return;
@@ -193,6 +235,24 @@ function App({ currentUser }: { currentUser: PublicUser }) {
       document.removeEventListener("keydown", closeOnEscape);
     };
   }, [isHeaderProfileMenuOpen]);
+
+  useEffect(() => {
+    if (!isWorkspaceMenuOpen) return;
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (!workspaceMenuRef.current?.contains(event.target as Node)) {
+        setIsWorkspaceMenuOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsWorkspaceMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isWorkspaceMenuOpen]);
 
   const visibleTasks = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -228,9 +288,11 @@ function App({ currentUser }: { currentUser: PublicUser }) {
 
   const setTaskStatus = async (task: Task, status: Task["status"]) => {
     try {
-      const response = await api.patch<{ task: ApiTask }>(`/tasks/${task.id}`, {
-        status,
-      });
+      const response = await api.patch<{ task: ApiTask }>(
+        `/tasks/${task.id}`,
+        { status },
+        { params: { workspaceId: selectedWorkspaceId } },
+      );
       setTasks((currentTasks) =>
         currentTasks.map((item) =>
           item.id === task.id ? mapApiTask(response.data.task, currentUser) : item,
@@ -247,7 +309,7 @@ function App({ currentUser }: { currentUser: PublicUser }) {
 
   const deleteTask = async (id: string) => {
     try {
-      await api.delete(`/tasks/${id}`);
+      await api.delete(`/tasks/${id}`, { params: { workspaceId: selectedWorkspaceId } });
       setTasks((currentTasks) => currentTasks.filter((task) => task.id !== id));
       setApiError("");
     } catch {
@@ -256,7 +318,9 @@ function App({ currentUser }: { currentUser: PublicUser }) {
   };
 
   const addTask = async (task: CreateTaskInput) => {
-    const response = await api.post<{ task: ApiTask }>("/tasks", task);
+    const response = await api.post<{ task: ApiTask }>("/tasks", task, {
+      params: { workspaceId: selectedWorkspaceId },
+    });
     setTasks((currentTasks) => [mapApiTask(response.data.task, currentUser), ...currentTasks]);
     setActiveView("All tasks");
     setActiveFilter("All");
@@ -264,7 +328,9 @@ function App({ currentUser }: { currentUser: PublicUser }) {
   };
 
   const addProject = async (project: { name: string; color: string }) => {
-    const response = await api.post<{ project: Project }>("/workspace/projects", project);
+    const response = await api.post<{ project: Project }>("/workspace/projects", project, {
+      params: { workspaceId: selectedWorkspaceId },
+    });
     setProjects((currentProjects) =>
       [...currentProjects, response.data.project].sort((first, second) =>
         first.name.localeCompare(second.name),
@@ -276,7 +342,7 @@ function App({ currentUser }: { currentUser: PublicUser }) {
   const inviteMember = async (email: string) => {
     const response = await api.post<{ member: WorkspaceMember }>("/workspace/members", {
       email,
-    });
+    }, { params: { workspaceId: selectedWorkspaceId } });
     setMembers((currentMembers) => [...currentMembers, response.data.member]);
     setApiError("");
   };
@@ -298,6 +364,21 @@ function App({ currentUser }: { currentUser: PublicUser }) {
     setActiveView(view);
     setActiveFilter("All");
     setIsSidebarOpen(false);
+  };
+
+  const selectWorkspace = (workspace: WorkspaceOption) => {
+    setSelectedWorkspaceId(workspace.id);
+    setWorkspaceName(workspace.name);
+    window.localStorage.setItem(`taskm-workspace-${currentUser.id}`, workspace.id);
+    setIsWorkspaceMenuOpen(false);
+    setIsSidebarOpen(false);
+    setIsModalOpen(false);
+    setIsProjectModalOpen(false);
+    setIsInviteModalOpen(false);
+    setQuery("");
+    setTasks([]);
+    setProjects([]);
+    setMembers([]);
   };
 
   return (
@@ -322,14 +403,41 @@ function App({ currentUser }: { currentUser: PublicUser }) {
           </button>
         </div>
 
-        <button className="workspace-switcher">
-          <span className="workspace-avatar">{workspaceName.charAt(0).toUpperCase() || "W"}</span>
-          <span className="workspace-copy">
-            <span className="workspace-label">Workspace</span>
-            <span className="workspace-name">{workspaceName || "Your workspace"}</span>
-          </span>
-          <ChevronDown size={16} className="workspace-chevron" />
-        </button>
+        <div className="workspace-menu-wrap" ref={workspaceMenuRef}>
+          <button
+            aria-expanded={isWorkspaceMenuOpen}
+            aria-haspopup="menu"
+            className="workspace-switcher"
+            disabled={workspaces.length < 2}
+            onClick={() => setIsWorkspaceMenuOpen((isOpen) => !isOpen)}
+            type="button"
+          >
+            <span className="workspace-avatar">{workspaceName.charAt(0).toUpperCase() || "W"}</span>
+            <span className="workspace-copy">
+              <span className="workspace-label">Workspace</span>
+              <span className="workspace-name">{workspaceName || "Your workspace"}</span>
+            </span>
+            {workspaces.length > 1 && <ChevronDown size={16} className="workspace-chevron" />}
+          </button>
+          {isWorkspaceMenuOpen && workspaces.length > 1 && (
+            <div aria-label="Select workspace" className="workspace-menu" role="menu">
+              {workspaces.map((workspace) => (
+                <button
+                  aria-checked={workspace.id === selectedWorkspaceId}
+                  className="workspace-menu-item"
+                  key={workspace.id}
+                  onClick={() => selectWorkspace(workspace)}
+                  role="menuitemradio"
+                  type="button"
+                >
+                  <span className="workspace-menu-avatar">{workspace.name.charAt(0).toUpperCase()}</span>
+                  <span>{workspace.name}</span>
+                  {workspace.id === selectedWorkspaceId && <Check size={15} />}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         <nav className="primary-nav" aria-label="Main navigation">
           <p className="nav-heading">WORKSPACE</p>

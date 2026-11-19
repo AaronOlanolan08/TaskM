@@ -40,9 +40,9 @@ export async function addWorkspaceMember(workspaceId: string, email: string) {
   };
 }
 
-export async function getWorkspaceForUser(userId: string) {
+export async function getWorkspaceForUser(userId: string, workspaceId?: string) {
   return prisma.workspaceMember.findFirst({
-    where: { userId },
+    where: { userId, ...(workspaceId ? { workspaceId } : {}) },
     orderBy: { joinedAt: "desc" },
     include: {
       workspace: {
@@ -63,4 +63,19 @@ export async function getWorkspaceForUser(userId: string) {
       },
     },
   });
+}
+
+export async function listWorkspacesForUser(userId: string) {
+  const memberships = await prisma.workspaceMember.findMany({
+    where: { userId },
+    orderBy: { joinedAt: "desc" },
+    select: {
+      role: true,
+      workspace: { select: { id: true, name: true } },
+    },
+  });
+  return memberships.map(({ role, workspace }) => ({
+    ...workspace,
+    role,
+  }));
 }

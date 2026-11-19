@@ -41,7 +41,12 @@ const updateTaskSchema = z.object(taskFields).refine(
 );
 
 async function workspaceIdForRequest(request: Request, response: Response) {
-  const membership = await getWorkspaceForUser(request.auth!.userId);
+  const query = z.object({ workspaceId: z.string().uuid().optional() }).safeParse(request.query);
+  if (!query.success) {
+    response.status(400).json({ error: "Invalid workspace selection." });
+    return null;
+  }
+  const membership = await getWorkspaceForUser(request.auth!.userId, query.data.workspaceId);
   if (!membership) {
     response.status(404).json({ error: "No workspace is available for this account." });
     return null;

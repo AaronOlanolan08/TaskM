@@ -5,6 +5,7 @@ import {
   addWorkspaceMember,
   createProject,
   getWorkspaceForUser,
+  listWorkspacesForUser,
 } from "./workspace.service.js";
 
 const createProjectSchema = z.object({
@@ -16,6 +17,27 @@ const addWorkspaceMemberSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(320),
 });
 
+async function workspaceForRequest(request: Request, response: Response) {
+  const query = z.object({ workspaceId: z.string().uuid().optional() }).safeParse(request.query);
+  if (!query.success) {
+    response.status(400).json({ error: "Invalid workspace selection." });
+    return null;
+  }
+  const membership = await getWorkspaceForUser(request.auth!.userId, query.data.workspaceId);
+  if (!membership) {
+    response.status(404).json({ error: "No workspace is available for this account." });
+    return null;
+  }
+  return membership;
+}
+
+export async function listWorkspacesController(
+  request: Request,
+  response: Response,
+): Promise<void> {
+  response.json({ items: await listWorkspacesForUser(request.auth!.userId) });
+}
+
 export async function addWorkspaceMemberController(
   request: Request,
   response: Response,
@@ -26,11 +48,8 @@ export async function addWorkspaceMemberController(
     return;
   }
 
-  const membership = await getWorkspaceForUser(request.auth!.userId);
-  if (!membership) {
-    response.status(404).json({ error: "No workspace is available for this account." });
-    return;
-  }
+  const membership = await workspaceForRequest(request, response);
+  if (!membership) return;
 
   try {
     const result = await addWorkspaceMember(
@@ -69,11 +88,8 @@ export async function createProjectController(
     return;
   }
 
-  const membership = await getWorkspaceForUser(request.auth!.userId);
-  if (!membership) {
-    response.status(404).json({ error: "No workspace is available for this account." });
-    return;
-  }
+  const membership = await workspaceForRequest(request, response);
+  if (!membership) return;
 
   try {
     const project = await createProject(
@@ -98,11 +114,8 @@ export async function currentWorkspaceController(
   request: Request,
   response: Response,
 ): Promise<void> {
-  const membership = await getWorkspaceForUser(request.auth!.userId);
-  if (!membership) {
-    response.status(404).json({ error: "No workspace is available for this account." });
-    return;
-  }
+  const membership = await workspaceForRequest(request, response);
+  if (!membership) return;
 
   response.json({
     id: membership.workspace.id,
