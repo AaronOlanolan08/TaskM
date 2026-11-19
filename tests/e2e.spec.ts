@@ -181,6 +181,16 @@ test("end-to-end workspace journey", async ({ page, browser }, testInfo) => {
     const navigation = page.getByRole("navigation", { name: "Main navigation" });
     await navigation.getByRole("button", { name: /^All tasks/ }).click();
 
+    const sortTasks = page.getByRole("combobox", { name: "Sort tasks" });
+    await sortTasks.selectOption("priority");
+    const sortedTaskTitles = await page.locator(".task-row h3").allTextContents();
+    expect(sortedTaskTitles).toContain(firstTaskTitle);
+    expect(sortedTaskTitles).toContain(secondTaskTitle);
+    expect(sortedTaskTitles.indexOf(firstTaskTitle)).toBeLessThan(
+      sortedTaskTitles.indexOf(secondTaskTitle),
+    );
+    await sortTasks.selectOption("schedule");
+
     const overdueTask = page.locator(".task-row").filter({ hasText: overdueTaskTitle });
     await expect(overdueTask.getByText("Overdue", { exact: true })).toBeVisible();
     await overdueTask.getByRole("button", { name: `Options for ${overdueTaskTitle}` }).click();

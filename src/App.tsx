@@ -29,6 +29,8 @@ import { api, type PublicUser } from "./api";
 
 type Priority = "LOW" | "MEDIUM" | "HIGH";
 type View = "Today" | "Upcoming" | "Completed" | "All tasks";
+type TaskSort = "schedule" | "project" | "priority" | "project-priority" | "priority-project";
+const priorityOrder: Record<Priority, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
 
 type Task = {
   id: string;
@@ -138,6 +140,7 @@ function App({ currentUser }: { currentUser: PublicUser }) {
   const [workspaceName, setWorkspaceName] = useState("");
   const [activeView, setActiveView] = useState<View>("Today");
   const [activeFilter, setActiveFilter] = useState("All");
+  const [taskSort, setTaskSort] = useState<TaskSort>("schedule");
   const [query, setQuery] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -276,11 +279,34 @@ function App({ currentUser }: { currentUser: PublicUser }) {
           .toLowerCase()
           .includes(normalizedQuery);
       })
-      .sort((first, second) =>
-        (first.date || "9999-99-99").localeCompare(second.date || "9999-99-99") ||
-        (first.time && second.time ? timeInMinutes(first.time) - timeInMinutes(second.time) : 0),
-      );
-  }, [activeFilter, activeView, query, tasks]);
+      .sort((first, second) => {
+        const compareSchedule = () =>
+          (first.date || "9999-99-99").localeCompare(second.date || "9999-99-99") ||
+          (first.time && second.time ? timeInMinutes(first.time) - timeInMinutes(second.time) : 0);
+        const compareProject = () => {
+          if (first.projectId === null || second.projectId === null) {
+            return first.projectId === second.projectId ? 0 : first.projectId === null ? 1 : -1;
+          }
+          return first.project.localeCompare(second.project, undefined, {
+            numeric: true,
+            sensitivity: "base",
+          });
+        };
+        const comparePriority = () =>
+          priorityOrder[first.priority] - priorityOrder[second.priority];
+
+        let comparison = 0;
+        if (taskSort === "project") comparison = compareProject();
+        if (taskSort === "priority") comparison = comparePriority();
+        if (taskSort === "project-priority") {
+          comparison = compareProject() || comparePriority();
+        }
+        if (taskSort === "priority-project") {
+          comparison = comparePriority() || compareProject();
+        }
+        return comparison || compareSchedule();
+      });
+  }, [activeFilter, activeView, query, taskSort, tasks]);
 
   const openCount = tasks.filter((task) => !task.completed).length;
   const completedCount = tasks.filter((task) => task.completed).length;
@@ -669,6 +695,20 @@ function App({ currentUser }: { currentUser: PublicUser }) {
                   <h2>{activeView === "Today" ? "Your schedule" : `${pageTitle} list`}</h2>
                   <p>{visibleTasks.length} {visibleTasks.length === 1 ? "task" : "tasks"} to keep things moving</p>
                 </div>
+                <label className="task-sort-control">
+                  <span>Sort by</span>
+                  <select
+                    aria-label="Sort tasks"
+                    onChange={(event) => setTaskSort(event.target.value as TaskSort)}
+                    value={taskSort}
+                  >
+                    <option value="schedule">Due date</option>
+                    <option value="project">Project</option>
+                    <option value="priority">Priority</option>
+                    <option value="project-priority">Project, then priority</option>
+                    <option value="priority-project">Priority, then project</option>
+                  </select>
+                </label>
               </div>
 
               <div className="filter-pills" role="tablist" aria-label="Filter tasks">
