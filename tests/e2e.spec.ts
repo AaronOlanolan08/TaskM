@@ -343,3 +343,24 @@ test("requires matching passwords when creating an account", async ({ page }) =>
     expect(marker).toBe('" *"');
   }
 });
+
+test("refreshes an expired access token during an API request", async ({ page }) => {
+  await registerAccount(page, createTestAccount());
+
+  await page.context().clearCookies({ name: "taskm_access" });
+
+  await page.getByRole("button", { name: "Create project" }).click();
+  const projectDialog = page.getByRole("dialog", { name: "Create a project" });
+  const testProjectName = `Refresh test ${randomUUID().slice(0, 8)}`;
+  await projectDialog.getByLabel("Project name").fill(testProjectName);
+  const refreshResponse = page.waitForResponse((response) =>
+    response.url().endsWith("/api/auth/refresh") &&
+    response.request().method() === "POST",
+  );
+  await projectDialog.getByRole("button", { name: "Create project" }).click();
+
+  expect((await refreshResponse).status()).toBe(200);
+  await expect(projectDialog).toBeHidden();
+  await expect(page.locator(".project-row").filter({ hasText: testProjectName }))
+    .toBeVisible();
+});

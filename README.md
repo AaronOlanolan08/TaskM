@@ -131,8 +131,27 @@ SEED_USER_PASSWORD="your_local_demo_password"
 Notes:
 - `DATABASE_URL` is required for Prisma and the API server
 - `JWT_SECRET` must be at least 32 characters long
+- Google sign-in is optional. Configure a Google OAuth client and set
+  `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, and
+  `APP_ORIGIN` to enable it. For local development, the redirect URI is
+  `http://localhost:3001/api/auth/google/callback` and the app origin is
+  `http://localhost:5173`.
 - `SEED_USER_PASSWORD` is optional; if unset, the seed script creates one and prints it once
 - `.env` should not be committed to source control
+
+### Configure Google sign-in
+1. In Google Cloud Console, configure the OAuth consent screen and add your account
+   as a test user if the app is in testing mode.
+2. Create an OAuth client ID of type **Web application**.
+3. Add `http://localhost:3001/api/auth/google/callback` as an authorized redirect URI.
+   The value must match `GOOGLE_REDIRECT_URI` exactly.
+4. Put the client ID and client secret in the project `.env` as
+   `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, then restart the API.
+
+For deployment, use HTTPS and set `GOOGLE_REDIRECT_URI` to the public callback
+URL exposed under the same origin as the app's `/api` routes, and `APP_ORIGIN`
+to the public frontend origin. Add the exact production callback URL to the
+Google OAuth client as well.
 
 ## Running the app locally
 
@@ -219,6 +238,10 @@ The API is mounted under `/api` and includes:
 - `POST /api/auth/logout` — invalidate the refresh session and clear cookies
 - `GET /api/auth/me` — return the current authenticated user
 
+The client automatically refreshes and retries a request once when an API call
+receives an expired access-token response. Refresh tokens rotate and remain valid
+for up to 30 days of activity.
+
 ### Workspace routes
 - `GET /api/workspace/current` — get the current workspace, members, and projects
 - `POST /api/workspace/members` — add a user to the workspace by email
@@ -251,7 +274,6 @@ Supported task query filters:
 ## Current limitations / planned work
 
 This project is currently a strong MVP for a task management flow, but a few features are intentionally not yet implemented:
-- Google OAuth sign-in
 - Password reset/forgot-password flow
 - Multi-workspace switching in the UI
 - Team permission roles beyond basic workspace membership checks

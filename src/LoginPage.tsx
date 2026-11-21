@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { ArrowRight, CalendarDays, Eye, EyeOff, ListChecks } from "lucide-react";
 import { isAxiosError } from "axios";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "./api";
 
 function LoginPage() {
@@ -11,10 +11,25 @@ function LoginPage() {
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
     document.title = "Sign in - Taskm";
   }, []);
+
+  useEffect(() => {
+    const googleError = searchParams.get("google_error");
+    if (!googleError) return;
+
+    const messages: Record<string, string> = {
+      account_unavailable: "This account is unavailable. Contact your workspace administrator.",
+      cancelled: "Google sign-in was cancelled.",
+      failed: "Google sign-in could not be completed. Please try again.",
+      not_configured: "Google sign-in isn't configured yet. Add the Google OAuth credentials to the server environment.",
+    };
+    setMessage(messages[googleError] ?? messages.failed);
+    setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -144,7 +159,7 @@ function LoginPage() {
           <div className="login-divider"><span>OR</span></div>
           <button
             className="google-login"
-            onClick={() => setMessage("Google sign-in isn't configured yet.")}
+            onClick={() => window.location.assign("/api/auth/google")}
             type="button"
           >
             <GoogleMark /> Continue with Google

@@ -15,26 +15,25 @@ function RequireAuth() {
 
   React.useEffect(() => {
     let active = true;
+    const handleAuthExpired = () => navigate("/login", { replace: true });
+    window.addEventListener("taskm:auth-expired", handleAuthExpired);
     const loadUser = async () => {
       try {
         const response = await api.get<{ user: PublicUser }>("/auth/me");
         if (active) setUser(response.data.user);
       } catch (error) {
         if (isAxiosError(error) && error.response?.status === 401) {
-          try {
-            await api.post("/auth/refresh");
-            const response = await api.get<{ user: PublicUser }>("/auth/me");
-            if (active) setUser(response.data.user);
-          } catch {
-            if (active) navigate("/login", { replace: true });
-          }
+          if (active) navigate("/login", { replace: true });
         } else if (active) {
           setError("Unable to connect to Taskm. Check that the API server is running.");
         }
       }
     };
     void loadUser();
-    return () => { active = false; };
+    return () => {
+      active = false;
+      window.removeEventListener("taskm:auth-expired", handleAuthExpired);
+    };
   }, [navigate]);
 
   if (error) return <div className="app-load-error" role="alert">{error}</div>;

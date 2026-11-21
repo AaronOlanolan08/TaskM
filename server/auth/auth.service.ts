@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
+import { Prisma } from "@prisma/client";
 import { jwtVerify, SignJWT } from "jose";
 import { config } from "../config.js";
 import { prisma } from "../db/prisma.js";
@@ -25,6 +26,13 @@ export type AuthTokens = {
 };
 
 export type AuthResult = { user: PublicUser; tokens: AuthTokens };
+
+type GoogleProfile = {
+  sub: string;
+  email: string;
+  name: string;
+  picture?: string;
+};
 
 const hashRefreshToken = (token: string) =>
   createHash("sha256").update(token).digest("hex");
@@ -62,6 +70,28 @@ async function createSession(userId: string): Promise<AuthTokens> {
     refreshToken,
     refreshExpiresAt,
   };
+}
+
+async function createWorkspace(
+  transaction: Prisma.TransactionClient,
+  userId: string,
+  name: string,
+): Promise<void> {
+  const workspace = await transaction.workspace.create({
+    data: {
+      name: `${name}'s workspace`.slice(0, 100),
+      slug: `workspace-${randomUUID()}`,
+      createdById: userId,
+    },
+    select: { id: true },
+  });
+  await transaction.workspaceMember.create({
+    data: {
+      workspaceId: workspace.id,
+      userId,
+      role: "OWNER",
+    },
+  });
 }
 
 export async function login(
@@ -102,22 +132,7 @@ export async function register(
       data: { name, email, passwordHash },
       select: { id: true, email: true, name: true },
     });
-    const workspace = await transaction.workspace.create({
-      data: {
-        name: `${name}'s workspace`.slice(0, 100),
-        slug: `workspace-${randomUUID()}`,
-        createdById: newUser.id,
-      },
-      select: { id: true },
-    });
-    await transaction.workspaceMember.create({
-      data: {
-        workspaceId: workspace.id,
-        userId: newUser.id,
-        role: "OWNER",
-      },
-    });
-
+    await createWorkspace(transaction, newUser.id, name);
     return newUser;
   });
 
@@ -125,6 +140,78 @@ export async function register(
     user,
     tokens: await createSession(user.id),
   };
+}
+
+export async function loginWithGoogle(
+  profile: GoogleProfile,
+): Promise<AuthResult | null> {
+  const user = await prisma.$transaction(async (transaction) => {
+    const linkedAccount = await transaction.oAuthAccount.findUnique({
+      where: {
+        provider_providerAccountId: {
+          provider: "google",
+          providerAccountId: profile.sub,
+        },
+      },
+      select: {
+        user: {
+          select: { id: true, email: true, name: true, disabledAt: true },
+        },
+      },
+    });
+
+    if (linkedAccount) {
+      const linkedUser = linkedAccount.user;
+      return linkedUser.disabledAt ? null : {
+        id: linkedUser.id,
+        email: linkedUser.email,
+        name: linkedUser.name,
+      };
+    }
+
+    const existingUser = await transaction.user.findUnique({
+      where: { email: profile.email },
+      select: { id: true, email: true, name: true, disabledAt: true },
+    });
+
+    if (existingUser?.disabledAt) return null;
+
+    if (existingUser) {
+      await transaction.oAuthAccount.create({
+        data: {
+          userId: existingUser.id,
+          provider: "google",
+          providerAccountId: profile.sub,
+        },
+      });
+      return {
+        id: existingUser.id,
+        email: existingUser.email,
+        name: existingUser.name,
+      };
+    }
+
+    const newUser = await transaction.user.create({
+      data: {
+        email: profile.email,
+        name: profile.name,
+        avatarUrl: profile.picture,
+        emailVerifiedAt: new Date(),
+        oauthAccounts: {
+          create: {
+            provider: "google",
+            providerAccountId: profile.sub,
+          },
+        },
+      },
+      select: { id: true, email: true, name: true },
+    });
+    await createWorkspace(transaction, newUser.id, newUser.name);
+    return newUser;
+  });
+
+  if (!user) return null;
+  return { user, tokens: await createSession(user.id) };
 }
 
 export async function refreshSession(

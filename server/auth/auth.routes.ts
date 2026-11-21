@@ -4,6 +4,8 @@ import {
   loginController,
   logoutController,
   meController,
+  googleAuthCallbackController,
+  googleAuthStartController,
   registerController,
   refreshController,
 } from "./auth.controller.js";
@@ -37,6 +39,8 @@ export const authRouter = Router();
 
 authRouter.post("/login", loginLimiter, loginController);
 authRouter.post("/register", registerLimiter, registerController);
+authRouter.get("/google", googleAuthStartController);
+authRouter.get("/google/callback", googleAuthCallbackController);
 authRouter.post("/refresh", refreshLimiter, refreshController);
 authRouter.post("/logout", logoutController);
 authRouter.get("/me", requireAuth, meController);
